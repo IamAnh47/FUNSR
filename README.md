@@ -31,7 +31,10 @@ Cấu trúc thư mục
 ```bash
     python preprocess.py
 ```
+Vì LIDC-IDRI quá nặng nên tôi đã preprocessing sẵn, tải về tại:
+https://drive.google.com/drive/folders/1S8XV5ojhY1775oiPul2ICPGtOVMO08dS?usp=sharing
 
+=> Đưa nó vào data/processed
 3. Training
 
 ```bash
@@ -156,5 +159,35 @@ Sau đó, F-Score là trung bình điều hòa của cả hai:
 $$F\text{-}Score(\tau) = \frac{2 \cdot Precision(\tau) \cdot Recall(\tau)}{Precision(\tau) + Recall(\tau)}$$
 
 => Loại bỏ ảnh hưởng của các điểm nhiễu (outliers) nằm quá xa mà Chamfer Distance thường bị ảnh hưởng. Phản ánh đúng cảm nhận thị giác của con người.
+
+d. Chỉ số Thể tích
+
+Trong khi CD và HD đánh giá bề mặt, các chỉ số thể tích đánh giá độ trùng khớp của khối đặc bên trong.
+
+Vì mô hình xuất ra dạng Mesh chứ không phải Voxel, chúng tôi sử dụng phương pháp Monte Carlo Sampling để ước lượng thể tích:
+
+Sinh ngẫu nhiên $N$ điểm (ví dụ $50,000$) trong không gian bao quanh nốt phổi.
+
+Kiểm tra xem mỗi điểm nằm trong Mesh Dự đoán ($V_{pred}$) và Mesh Thực tế ($V_{gt}$) hay không.
+
+- Dice Similarity Coefficient (DSC):
+
+Đo mức độ trùng lặp giữa hai thể tích.
+
+$$DSC = \frac{2 \cdot |V_{pred} \cap V_{gt}|}{|V_{pred}| + |V_{gt}|}$$
+
+$DSC = 1$: Trùng khớp hoàn toàn.
+
+$DSC = 0$: Không có điểm chung.
+
+Trong y tế, $DSC > 0.7$ thường được coi là tốt, $> 0.85$ là xuất sắc.
+
+- Intersection over Union (IoU):
+
+Tương tự như Dice nhưng khắt khe hơn một chút.
+
+$$IoU = \frac{|V_{pred} \cap V_{gt}|}{|V_{pred} \cup V_{gt}|}$$
+
+$IoU$ luôn nhỏ hơn hoặc bằng $DSC$. $IoU > 0.5$ đối với 3D là một kết quả tốt.
 
 #### Tác giả: Tuấn Anh, HCMUT

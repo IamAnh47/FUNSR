@@ -4,22 +4,17 @@ import numpy as np
 from tqdm import tqdm
 import json
 import random
-import pylidc as pl
 import glob
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pylidc.utils import consensus
 
-# Import loader của chúng ta
+
+import trimesh
+import mcubes
+# -----------------------------------
+
+# Import loader
 from src.dicom_loader import DicomLoader
-
-
-def farthest_point_sampling(points, n_samples):
-    """FPS Sampling tối ưu cho numpy"""
-    if len(points) <= n_samples: return points
-    # Dùng random choice cho nhanh (FPS chuẩn rất chậm trên CPU)
-    # Nếu muốn strict FPS, cần dùng thư viện C++ binding
-    indices = np.random.choice(len(points), n_samples, replace=False)
-    return points[indices]
 
 
 def process_single_patient(args):
@@ -27,7 +22,11 @@ def process_single_patient(args):
 
     # Setup paths
     raw_dir = cfg['paths']['raw_data']
-    pc_dir = os.path.join(cfg['paths']['processed_data'], "pointclouds")
+    processed_dir = cfg['paths']['processed_data']
+
+    # Tạo đường dẫn lưu pointcloud và mesh
+    pc_dir = os.path.join(processed_dir, "pointclouds")
+    mesh_dir = os.path.join(processed_dir, "meshes")  # <--- Thêm thư mục Mesh
 
     loader = DicomLoader(raw_dir)
 
@@ -42,40 +41,65 @@ def process_single_patient(args):
 
         valid_nodules = 0
         for i, cluster in enumerate(nodules):
-            # Bỏ qua nếu ít đồng thuận hoặc quá phức tạp (>4 annotations thường là nhiễu)
+            # Bỏ qua nếu ít đồng thuận
             if len(cluster) < 3: continue
 
             try:
                 # 1. Tạo Consensus Mask (Gộp ý kiến bác sĩ)
                 # clevel=0.5 nghĩa là ít nhất 50% bác sĩ đồng ý đó là nốt
+                # padding quan trọng để marching cubes không bị hở biên
                 mask, cbbox, _ = consensus(cluster, clevel=cfg['data']['consensus_level'], pad=cfg['data']['padding'])
 
-                # 2. Kiểm tra kích thước
-                # Chỉ lấy các điểm thuộc mask (Volumetric Point Cloud)
-                z, y, x = np.where(mask > 0.5)
-                if len(z) < 500: continue  # Quá nhỏ
+                # --- PHẦN SỬA ĐỔI QUAN TRỌNG ---
 
-                points = np.stack([x, y, z], axis=1).astype(np.float32)
+                # 2. Tạo Mesh từ Mask bằng Marching Cubes
+                # (Thay vì dùng np.where lấy voxel)
+                try:
+                    # Thuật toán Marching Cubes
+                    verts, faces = mcubes.marching_cubes(mask, 0.5)
 
-                # 3. Chuẩn hóa về [-1, 1] (CỰC KỲ QUAN TRỌNG CHO FUNSR)
-                # Centering
-                centroid = np.mean(points, axis=0)
-                points -= centroid
-                # Scale về cầu đơn vị
-                max_dist = np.max(np.linalg.norm(points, axis=1))
+                    # Tạo đối tượng Trimesh
+                    mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+
+                    # Kiểm tra lưới rác
+                    if len(mesh.vertices) < 100: continue
+
+                except Exception:
+                    continue
+
+                # 3. Chuẩn hóa Mesh về [-1, 1] (Normalization)
+                # Việc chuẩn hóa Mesh sẽ tự động chuẩn hóa các điểm lấy mẫu sau này
+
+                # Centering (Dời về gốc tọa độ)
+                centroid = mesh.centroid
+                mesh.vertices -= centroid
+
+                # Scaling (Co về cầu đơn vị)
+                # Tìm đỉnh xa nhất
+                max_dist = np.max(np.linalg.norm(mesh.vertices, axis=1))
                 if max_dist == 0: continue
-                points /= max_dist
+                # Scale sao cho nằm gọn trong [-1, 1] (chia cho max_dist * 1.05 để có chút lề)
+                mesh.vertices /= (max_dist * 1.0)
 
-                # 4. Downsample
-                points = farthest_point_sampling(points, cfg['data']['num_points'])
-
-                # 5. Lưu file .npy
+                # 4. Lưu Ground Truth Mesh (.obj)
+                # Để sau này dùng file này so sánh visual với kết quả predict
                 file_id = f"{pid}_nodule{i}"
+                mesh.export(os.path.join(mesh_dir, f"{file_id}_gt.obj"))
+
+                # 5. Lấy mẫu điểm (Sampling) từ Mesh để Train
+                # Dùng sample_surface của trimesh xịn hơn FPS thủ công
+                points, _ = trimesh.sample.sample_surface(mesh, cfg['data']['num_points'])
+
+                # Đảm bảo kiểu dữ liệu float32 cho PyTorch
+                points = points.astype(np.float32)
+
+                # 6. Lưu Point Cloud (.npy)
                 np.save(os.path.join(pc_dir, f"{file_id}.npy"), points)
 
                 valid_nodules += 1
 
             except Exception as e:
+                # print(f"Lỗi nốt {i}: {e}") # Uncomment để debug nếu cần
                 continue
 
         if valid_nodules > 0:
@@ -97,7 +121,10 @@ def main():
 
     PROCESSED_DIR = cfg['paths']['processed_data']
     PC_DIR = os.path.join(PROCESSED_DIR, "pointclouds")
+    MESH_DIR = os.path.join(PROCESSED_DIR, "meshes")  # <--- Tạo thêm folder meshes
+
     os.makedirs(PC_DIR, exist_ok=True)
+    os.makedirs(MESH_DIR, exist_ok=True)
 
     # File log để resume
     LOG_FILE = os.path.join(PROCESSED_DIR, "processed_log.json")
@@ -118,10 +145,10 @@ def main():
     if not target_patients:
         print("Đã xử lý hết dữ liệu!")
     else:
-        print(f"Bắt đầu xử lý {len(target_patients)} bệnh nhân...")
+        print(f"Bắt đầu xử lý {len(target_patients)} bệnh nhân (Tạo cả .npy và _gt.obj)...")
 
         # Chạy song song
-        max_workers = min(os.cpu_count(), 8)  # Đừng dùng hết 100% CPU kẻo treo máy
+        max_workers = min(os.cpu_count(), 8)
         tasks = [(pid, cfg) for pid in target_patients]
 
         stats = {"success": 0, "nodules": 0}
@@ -136,7 +163,7 @@ def main():
                     stats['success'] += 1
                     stats['nodules'] += res['nodules']
 
-                # Luôn ghi nhận là đã xử lý (dù lỗi hay không) để ko chạy lại
+                # Luôn ghi nhận là đã xử lý
                 completed_patients.add(res['pid'])
 
                 # Save log định kỳ
@@ -159,13 +186,13 @@ def main():
             fname = os.path.basename(fpath)
             pid = fname.split("_")[0]
             if pid not in patient_map: patient_map[pid] = []
-            patient_map[pid].append(fname)  # Chỉ lưu tên file, không lưu full path cho gọn
+            patient_map[pid].append(fname)
 
         pids = list(patient_map.keys())
         random.seed(42)
         random.shuffle(pids)
 
-        # Tỉ lệ: 80% Train - 10% Val - 10% Test (Evaluation)
+        # Tỉ lệ: 80% Train - 10% Val - 10% Test
         n = len(pids)
         n_train = int(n * 0.8)
         n_val = int(n * 0.1)
