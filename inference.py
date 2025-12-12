@@ -127,7 +127,7 @@ def reconstruct_and_evaluate(net, model_path, gt_path, gt_mesh_source_path, save
         verts, faces = mcubes.marching_cubes(sdfs, 0.0)
         verts = (verts / (N - 1)) * 2.2 - 1.1
         mesh = trimesh.Trimesh(verts, faces)
-        matrix = tf.euler_matrix(0, 0, np.radians(90), 'sxyz')
+        matrix = tf.euler_matrix(0, np.radians(180), np.radians(90), 'sxyz')
         mesh.apply_transform(matrix)
         mesh.export(save_mesh_path)
     except ValueError:
