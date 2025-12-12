@@ -20,8 +20,8 @@ Cấu trúc thư mục
 
 ```bash
     # 1. Clone repo
-    git clone https://github.com/username/project-name.git
-    cd project-name
+    git clone https://github.com/IamAnh47/FUNSR.git
+    cd FUNSR
     
     # 2. Cài đặt thư viện
     pip install -r requirements.txt
