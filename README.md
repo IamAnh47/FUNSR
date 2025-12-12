@@ -127,11 +127,14 @@ $$CD(P, G) = \frac{1}{|P|} \sum_{p \in P} \min_{g \in G} ||p - g||_2^2 + \frac{1
 
 b. Hausdorff Distance (HD)
 
-Đo khoảng cách xa nhất của điểm sai nhất.
+- Đo khoảng cách xa nhất của điểm sai nhất.
 
-$$HD(P, G) = \max \left\{ \max_{p \in P} \min_{g \in G} ||p - g||, \max_{g \in G} \min_{p \in P} ||g - p|| \right\}$$
+$$HD(P, G) = \max \left\{ 
+\max_{p \in P} \min_{g \in G} ||p - g||,
+\max_{g \in G} \min_{p \in P} ||g - p|| 
+\right\}$$
 
-Chỉ số này cực kỳ quan trọng trong y tế (Xạ trị/Phẫu thuật), vì nó cho biết biên giới khối u bị lệch tối đa bao nhiêu mm. Nó đảm bảo không có phần nào của khối u bị bỏ sót hoặc mô lành bị xâm lấn quá mức.
+- Chỉ số này cực kỳ quan trọng trong y tế, vì nó cho biết biên giới khối u bị lệch tối đa bao nhiêu mm. Nó đảm bảo không có phần nào của khối u bị bỏ sót hoặc mô lành bị xâm lấn quá mức.
 
 c. F-Score
 
