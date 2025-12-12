@@ -1,0 +1,7 @@
+data/raw/
+
+venv
+
+.gradio
+
+processed.tar.gz

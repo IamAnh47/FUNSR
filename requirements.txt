@@ -1,0 +1,26 @@
+# --- Deep Learning Core ---
+torch>=2.0.0
+torchvision
+
+sqlalchemy
+matplotlib
+scikit-image
+# --- Data Processing & Math ---
+numpy
+scipy
+pandas
+
+# --- Medical Imaging ---
+pylidc
+pydicom
+
+# --- 3D Processing & Meshing ---
+PyMCubes
+trimesh
+
+# --- Utilities ---
+pyyaml
+tqdm
+
+# OBj
+gradio

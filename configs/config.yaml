@@ -1,0 +1,26 @@
+paths:
+  raw_data: "./data/raw/LIDC-IDRI"
+  processed_data: "./data/processed"
+
+data:
+  num_points: 20000         # Số điểm point cloud
+  consensus_level: 0.5      # Mức độ đồng thuận (0.5 = 2/4 bác sĩ)
+  padding: 10               # Padding khi crop nốt phổi
+
+train:
+  batch_size: 5000
+  lr: 0.001
+  iterations: 3000
+  query_sigma: 0.08
+  queries_per_point: 25
+  save_interval: 2000
+  
+  # Loss weights
+  lambda_self: 1.0
+  lambda_scc: 0.005
+  lambda_gan: 0.005
+
+model:
+  hidden_dim: 256
+  layers: 8
+  skip: 4

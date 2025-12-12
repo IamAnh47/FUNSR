@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interactive 3D Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        /* --- CSS GIỮ NGUYÊN TỪ BẢN TRƯỚC, CÓ THÊM PHẦN TOOLBAR --- */
+        body { margin: 0; overflow: hidden; background-color: #111; font-family: 'Inter', sans-serif; user-select: none; }
+
+        #sidebar {
+            position: absolute; top: 20px; left: 20px; width: 280px; max-height: 90vh;
+            background: rgba(30, 30, 40, 0.9); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px;
+            padding: 20px; display: flex; flex-direction: column; gap: 15px;
+            color: white; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); z-index: 10;
+        }
+
+        h2 { margin: 0; font-size: 18px; font-weight: 600; }
+        .sub-text { font-size: 11px; color: #888; margin-top: -10px; margin-bottom: 5px; }
+
+        .btn-group { display: flex; gap: 10px; }
+        .btn {
+            border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer;
+            flex: 1; display: flex; align-items: center; justify-content: center; transition: 0.2s;
+            font-size: 12px;
+        }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-add { background: #007bff; color: white; }
+        .btn-clear { background: #ff416c; color: white; }
+
+        /* Toolbar điều khiển vật thể */
+        #tools-panel {
+            display: none; /* Ẩn khi chưa chọn vật */
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px; border-radius: 8px; margin-top: 10px;
+        }
+        .tool-btn {
+            background: transparent; border: 1px solid #555; color: #ccc;
+            padding: 5px; margin: 2px; border-radius: 4px; cursor: pointer; width: 30%;
+        }
+        .tool-btn.active { background: #007bff; border-color: #007bff; color: white; }
+
+        #fileInput { display: none; }
+        .file-label {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; height: 40px; background: rgba(255,255,255,0.1);
+            border: 1px dashed rgba(255,255,255,0.3); border-radius: 8px;
+            cursor: pointer; color: #ccc; font-size: 13px;
+        }
+        .file-label:hover { border-color: white; color: white; }
+
+        #model-list { flex-grow: 1; overflow-y: auto; border-top: 1px solid #333; padding-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+
+        .model-item {
+            background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 6px;
+            display: flex; justify-content: space-between; align-items: center; font-size: 13px;
+            cursor: pointer; border: 1px solid transparent;
+        }
+        .model-item:hover { background: rgba(255,255,255,0.1); }
+        .model-item.selected { border-color: #007bff; background: rgba(0, 123, 255, 0.2); }
+
+        .model-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; display: flex; align-items: center; gap: 8px; }
+        .color-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .btn-del { background: none; border: none; color: #ff4b2b; cursor: pointer; }
+
+        #loader-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 999; align-items: center; justify-content: center; color: white;
+        }
+
+        /* Hướng dẫn phím tắt */
+        #shortcuts {
+            position: absolute; bottom: 20px; right: 20px;
+            background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px;
+            color: #aaa; font-size: 12px; pointer-events: none;
+        }
+        kbd { background: #333; padding: 2px 6px; border-radius: 4px; color: white; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <div>
+            <h2>Interactive Studio</h2>
+            <p class="sub-text">Upload & Chỉnh sửa vị trí</p>
+        </div>
+
+        <div class="btn-group">
+            <label for="fileInput" class="btn btn-add">Upload</label>
+            <input type="file" id="fileInput" accept=".obj" multiple>
+            <button id="clearAllBtn" class="btn btn-clear">Clear</button>
+        </div>
+
+        <div id="tools-panel">
+            <div style="font-size: 12px; margin-bottom: 5px; color: #ddd;">Chế độ điều khiển:</div>
+            <div style="display: flex; justify-content: space-between;">
+                <button class="tool-btn active" onclick="setMode('translate')">Di chuyển</button>
+                <button class="tool-btn" onclick="setMode('rotate')">Xoay</button>
+                <button class="tool-btn" onclick="setMode('scale')">Scale</button>
+            </div>
+            <div style="margin-top: 8px; font-size: 11px; text-align: center; color: #888;">
+                (Hoặc bấm phím <kbd>T</kbd> <kbd>R</kbd> <kbd>S</kbd>)
+            </div>
+        </div>
+
+        <div id="model-list">
+            <p style="text-align: center; font-size: 12px; color: #555; margin-top: 20px;">Trống</p>
+        </div>
+    </div>
+
+    <div id="shortcuts">
+        <p>🖱️ <b>Click trái:</b> Chọn vật thể</p>
+        <p>🖱️ <b>Click phải:</b> Xoay camera</p>
+        <p>Escape: Bỏ chọn</p>
+    </div>
+
+    <div id="loader-overlay">Đang xử lý...</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { TransformControls } from 'three/addons/controls/TransformControls.js'; // CÔNG CỤ QUAN TRỌNG
+
+        let camera, scene, renderer, orbit, transformControl;
+        let loadedObjects = [];
+        let raycaster, mouse;
+
+        init();
+        animate();
+
+        function init() {
+            // 1. Setup Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a);
+
+            // Grid nền (lưới) để dễ nhìn không gian
+            const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
+            scene.add(gridHelper);
+
+            // 2. Camera
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(5, 5, 8);
+
+            // 3. Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // 4. Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(10, 15, 10);
+            scene.add(dirLight);
+
+            // 5. Controls
+            // OrbitControls: Để xoay camera
+            orbit = new OrbitControls(camera, renderer.domElement);
+            orbit.enableDamping = true;
+
+            // TransformControls: Để kéo/xoay vật thể
+            transformControl = new TransformControls(camera, renderer.domElement);
+            // Khi đang kéo vật thì TẮT xoay camera đi để không bị loạn
+            transformControl.addEventListener('dragging-changed', function (event) {
+                orbit.enabled = !event.value;
+            });
+            scene.add(transformControl);
+
+            // 6. Raycaster (Để click chọn vật)
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Event Listeners
+            document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+            document.getElementById('clearAllBtn').addEventListener('click', clearAll);
+            window.addEventListener('resize', onWindowResize);
+
+            // Click chuột để chọn vật
+            window.addEventListener('pointerdown', onPointerDown);
+
+            // Phím tắt
+            window.addEventListener('keydown', function (event) {
+                switch (event.key.toLowerCase()) {
+                    case 't': setMode('translate'); break;
+                    case 'r': setMode('rotate'); break;
+                    case 's': setMode('scale'); break;
+                    case 'escape': deselectObject(); break;
+                }
+            });
+
+            // Expose function to global for HTML buttons
+            window.setMode = function(mode) {
+                transformControl.setMode(mode);
+                // Update button UI
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                const modeMap = {'translate': 0, 'rotate': 1, 'scale': 2};
+                const btns = document.querySelectorAll('.tool-btn');
+                if(btns[modeMap[mode]]) btns[modeMap[mode]].classList.add('active');
+            }
+        }
+
+        function onPointerDown(event) {
+            // Chỉ xử lý click chuột trái
+            if (event.button !== 0) return;
+
+            // Bỏ qua nếu click vào sidebar
+            if (event.target.closest('#sidebar')) return;
+
+            // Tính toạ độ chuột (-1 đến +1)
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+
+            // Lấy danh sách các mesh đang có
+            const meshes = [];
+            loadedObjects.forEach(obj => meshes.push(obj.mesh));
+
+            const intersects = raycaster.intersectObjects(meshes, true); // true để check cả con cháu (recursive)
+
+            if (intersects.length > 0) {
+                // Tìm ra cha cao nhất (Group) được lưu trong loadedObjects
+                let selectedMesh = intersects[0].object;
+
+                // Leo ngược lên cây phả hệ để tìm object gốc mà mình load vào
+                while(selectedMesh.parent && selectedMesh.parent !== scene) {
+                    selectedMesh = selectedMesh.parent;
+                }
+
+                selectObjectByMesh(selectedMesh);
+            } else {
+                deselectObject();
+            }
+        }
+
+        function selectObjectByMesh(meshObject) {
+            // Gắn công cụ điều khiển vào vật này
+            transformControl.attach(meshObject);
+
+            // Highlight UI bên Sidebar
+            const foundItem = loadedObjects.find(item => item.mesh === meshObject);
+            if(foundItem) {
+                updateListSelection(foundItem.id);
+                document.getElementById('tools-panel').style.display = 'block';
+            }
+        }
+
+        // Hàm chọn object từ Sidebar
+        window.selectFromList = function(id) {
+            const item = loadedObjects.find(i => i.id === id);
+            if(item) {
+                selectObjectByMesh(item.mesh);
+            }
+        }
+
+        function deselectObject() {
+            transformControl.detach();
+            document.getElementById('tools-panel').style.display = 'none';
+            document.querySelectorAll('.model-item').forEach(el => el.classList.remove('selected'));
+        }
+
+        function handleFileUpload(event) {
+            const files = event.target.files;
+            if (!files.length) return;
+            document.getElementById('loader-overlay').style.display = 'flex';
+
+            const loader = new OBJLoader();
+            Array.from(files).forEach(file => {
+                const url = URL.createObjectURL(file);
+                loader.load(url, (object) => {
+                    // Random màu
+                    const color = `hsl(${Math.random() * 360}, 70%, 80%)`;
+
+                    object.traverse(child => {
+                        if (child.isMesh) {
+                            child.material = new THREE.MeshStandardMaterial({
+                                color: new THREE.Color(color),
+                                roughness: 0.3, metalness: 0.1, side: THREE.DoubleSide
+                            });
+                            child.geometry.center();
+                        }
+                    });
+
+                    // Auto Scale
+                    const box = new THREE.Box3().setFromObject(object);
+                    const maxDim = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z);
+                    if (maxDim > 0) {
+                        const s = 4.0 / maxDim;
+                        object.scale.set(s, s, s);
+                    }
+
+                    scene.add(object);
+
+                    const newItem = { id: Date.now() + Math.random(), mesh: object, name: file.name, color: color };
+                    loadedObjects.push(newItem);
+
+                    updateUI();
+
+                    // Tự động chọn vật vừa load
+                    selectObjectByMesh(object);
+
+                    document.getElementById('loader-overlay').style.display = 'none';
+                    URL.revokeObjectURL(url);
+                });
+            });
+            event.target.value = '';
+        }
+
+        function updateUI() {
+            const list = document.getElementById('model-list');
+            list.innerHTML = '';
+            if(loadedObjects.length === 0) {
+                list.innerHTML = '<p style="text-align: center; font-size: 12px; color: #555; margin-top: 20px;">Trống</p>';
+                return;
+            }
+            loadedObjects.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'model-item';
+                div.id = 'item-' + item.id;
+                div.onclick = (e) => {
+                    // Nếu bấm nút xóa thì không chọn
+                    if(e.target.classList.contains('btn-del')) return;
+                    selectFromList(item.id);
+                };
+                div.innerHTML = `
+                    <div class="model-name">
+                        <span class="color-dot" style="background: ${item.color}"></span>
+                        <span>${item.name}</span>
+                    </div>
+                    <button class="btn-del" onclick="removeModel(${item.id})">×</button>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function updateListSelection(selectedId) {
+            document.querySelectorAll('.model-item').forEach(el => el.classList.remove('selected'));
+            const el = document.getElementById('item-' + selectedId);
+            if(el) el.classList.add('selected');
+        }
+
+        window.removeModel = function(id) {
+            const idx = loadedObjects.findIndex(i => i.id === id);
+            if (idx > -1) {
+                const item = loadedObjects[idx];
+                if(transformControl.object === item.mesh) deselectObject();
+                scene.remove(item.mesh);
+                loadedObjects.splice(idx, 1);
+                updateUI();
+            }
+        }
+
+        function clearAll() {
+            loadedObjects.forEach(i => scene.remove(i.mesh));
+            loadedObjects = [];
+            deselectObject();
+            updateUI();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            orbit.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
