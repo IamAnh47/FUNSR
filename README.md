@@ -15,8 +15,8 @@ Hàm Loss & Metrics
 
 Cấu trúc thư mục
 
-## Cài đặt 
-Dự án yêu cầu Python 3.8+ và GPU hỗ trợ CUDA (Khuyến nghị T4, RTX 3060 trở lên).
+## Cài đặt và training
+1. Dự án yêu cầu Python 3.8+ và GPU hỗ trợ CUDA (Khuyến nghị T4, RTX 3060 trở lên).
 
 ```bash
     # 1. Clone repo
@@ -25,6 +25,27 @@ Dự án yêu cầu Python 3.8+ và GPU hỗ trợ CUDA (Khuyến nghị T4, RTX
     
     # 2. Cài đặt thư viện
     pip install -r requirements.txt
+```
+2. Preprocessing
+
+```bash
+    python preprocess.py
+```
+
+3. Training
+
+```bash
+    python train.py --mode val --workers 1
+```
+
+4. Inference
+
+```bash
+    python inference.py
+```
+Để xem thử file obj nếu không tải về:
+```bash
+    python app.py
 ```
 
 ## Quy trình xử lý dữ liệu
